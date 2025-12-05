@@ -15,6 +15,9 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import asyncio
+from fastapi import FastAPI
+import uvicorn
+from threading import Thread
 
 # Dotenv ni o'rnatish
 try:
@@ -39,7 +42,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8570818233:AAGNh0lZgU4MTRoaM0XyrafOGRLAxHumh
 OWNER_ID = int(os.getenv("OWNER_ID", "8197301287"))
 
 # Server porti (Render uchun)
-
+PORT = int(os.getenv("PORT", 10000))
 
 # Adminlar fayli
 ADMINS_FILE = "admins.json"
@@ -271,6 +274,26 @@ class Database:
 
 # Global database obyekti
 db = Database()
+
+# FastAPI ilova yaratish
+fastapi_app = FastAPI()
+
+@fastapi_app.get("/")
+async def root():
+    return {"status": "online", "bot": "Kino Bot", "timestamp": datetime.now().isoformat()}
+
+@fastapi_app.get("/health")
+async def health_check():
+    return {"status": "healthy", "bot": "running"}
+
+@fastapi_app.get("/stats")
+async def get_stats():
+    return {
+        "movies_count": len(db.movies),
+        "channels_count": len(db.channels),
+        "users_count": len(db.users),
+        "admins_count": len(db.get_admins())
+    }
 
 # ========================== FUNKSIYALAR ==========================
 def is_admin(user_id: int) -> bool:
@@ -1118,9 +1141,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-# ========================== ASOSIY FUNKSIYA ==========================
-async def main_async():
-    """Asinxron asosiy funksiya"""
+# ========================== BOT FUNKSIYASI ==========================
+def run_bot():
+    """Botni ishga tushirish (alohida threadda)"""
+    print("🤖 Bot ishga tushmoqda...")
+    
     # Bot yaratish
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1140,44 +1165,32 @@ async def main_async():
     # Xatolik handleri
     application.add_error_handler(error_handler)
     
-    # Botni ishga tushirish
-    print("🤖 Bot ishga tushdi...")
     print(f"👑 EGA Admin ID: {OWNER_ID}")
     print(f"👤 Adminlar soni: {len(db.get_admins())}")
     print(f"🎬 Kinolar soni: {len(db.movies)}")
     print(f"📢 Kanallar soni: {len(db.channels)}")
     print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
     
-    # RENDER uchun WEBHOOK ni o'chirish
-    try:
-        from telegram import Bot
-        bot = Bot(token=BOT_TOKEN)
-        webhook_info = await bot.get_webhook_info()
-        if webhook_info.url:
-            print(f"⚠️ Webhook topildi: {webhook_info.url}")
-            await bot.delete_webhook()
-            print("✅ Webhook o'chirildi")
-        else:
-            print("ℹ️ Webhook yo'q")
-    except Exception as e:
-        print(f"⚠️ Webhook tekshirishda xato: {e}")
-    
     # Polling ni ishga tushirish
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    
-    # Dasturni to'xtatmaslik uchun
-    import asyncio
-    await asyncio.Event().wait()
+    application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
+    )
 
+# ========================== WEB SERVER FUNKSIYASI ==========================
+def run_web_server():
+    """Web server ishga tushirish"""
+    print(f"🌐 Web server {PORT} portda ishga tushmoqda...")
+    uvicorn.run(
+        fastapi_app,
+        host="0.0.0.0",
+        port=PORT,
+        log_level="info"
+    )
+
+# ========================== ASOSIY FUNKSIYA ==========================
 def main():
-    """Sinxron asosiy funksiya"""
-    import asyncio
-    asyncio.run(main_async())
-
-# ========================== RENDER.COM uchun QO'SHIMCHA ==========================
-if __name__ == "__main__":
+    """Asosiy funksiya - ikkala server birga"""
     # Fayllarni yaratish (agar mavjud bo'lmasa)
     for file in [MOVIES_FILE, CHANNELS_FILE, USERS_FILE, ADMINS_FILE]:
         if not os.path.exists(file):
@@ -1189,42 +1202,22 @@ if __name__ == "__main__":
                 with open(file, 'w', encoding='utf-8') as f:
                     json.dump({}, f, ensure_ascii=False, indent=4)
     
-    print(f"🚀 Render.com Background Worker da ishga tushmoqda...")
+    print(f"🚀 Render.com Web Service da ishga tushmoqda...")
+    print(f"🌐 PORT: {PORT}")
     
-    # Botni ishga tushirish
+    # Botni alohida threadda ishga tushirish
+    bot_thread = Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Web serverni asosiy threadda ishga tushirish
+    run_web_server()
+
+# ========================== DASURNI ISHGA TUSHIRISH ==========================
+if __name__ == "__main__":
     try:
-        # Bot yaratish
-        application = Application.builder().token(BOT_TOKEN).build()
-        
-        # Handlerlarni qo'shish
-        application.add_handler(CommandHandler("start", start_command))
-        application.add_handler(CallbackQueryHandler(callback_query_handler))
-        
-        # Fayl yuborish handleri
-        application.add_handler(MessageHandler(
-            filters.VIDEO | filters.Document.ALL | filters.AUDIO,
-            handle_file_message
-        ))
-        
-        # Matnli xabarlar handleri
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-        
-        # Xatolik handleri
-        application.add_error_handler(error_handler)
-        
-        # Botni ishga tushirish
-        print("🤖 Bot ishga tushdi...")
-        print(f"👑 EGA Admin ID: {OWNER_ID}")
-        
-        # Polling ni ishga tushirish
-        application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
-        
+        main()
     except KeyboardInterrupt:
         print("\n👋 Bot to'xtatildi")
     except Exception as e:
         logger.error(f"Asosiy xatolik: {e}")
         print(f"❌ Xatolik: {e}")
-
