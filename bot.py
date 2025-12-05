@@ -1154,16 +1154,87 @@ async def run_server():
     await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
 # ========================== ASOSIY FUNKSIYA ==========================
-async def main():
-    """Asosiy funksiya"""
+def main():
+    """Botni ishga tushirish"""
+    # Bot yaratish
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Handlerlarni qo'shish
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CallbackQueryHandler(callback_query_handler))
+    
+    # Fayl yuborish handleri
+    application.add_handler(MessageHandler(
+        filters.VIDEO | filters.Document.ALL | filters.AUDIO,
+        handle_file_message
+    ))
+    
+    # Matnli xabarlar handleri
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    # Xatolik handleri
+    application.add_error_handler(error_handler)
+    
+    # Botni ishga tushirish
+    print("🤖 Bot ishga tushdi...")
+    print(f"👑 EGA Admin ID: {OWNER_ID}")
+    print(f"👤 Adminlar soni: {len(db.get_admins())}")
+    print(f"🎬 Kinolar soni: {len(db.movies)}")
+    print(f"📢 Kanallar soni: {len(db.channels)}")
+    print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
+    print("\n📱 Admin panellari:")
+    print("   👑 EGA Admin: 9 ta tugma (admin boshqaruv bilan)")
+    print("   👤 Oddiy Admin: 8 ta tugma")
+    print("   👤 Foydalanuvchi: 1 ta tugma")
+    print("\n👑 Admin Boshqaruv paneli (4 ta tugma):")
+    print("   ➕ Yangi Admin Qo'shish")
+    print("   ➖ Admin O'chirish") 
+    print("   📋 Adminlar Ro'yxati")
+    print("   🔙 Admin Panelga Qaytish")
+    print("\n🎬 Kino o'chirish funksiyasi - Soddalashtirildi!")
+    print("   ✅ '🗑️ Kino O'chirish' tugmasi")
+    print("   ✅ Kino kodi yuborilgach darhol o'chiriladi")
+    print("   ❌ TASDIQLASH KERAK EMAS!")
+    print("   ✅ To'liq ma'lumot bilan o'chirish natijasi")
+    print("\n✅ Kanal qo'shish: TO'LIQ ISHLAYDI")
+    print("✅ Kanal ko'rish: TO'LIQ ISHLAYDI")
+    print("✅ Kanal o'chirish: TO'LIQ ISHLAYDI")
+    print("✅ Kino o'chirish: TO'LIQ ISHLAYDI (tasdiqlashsiz!)")
+    print("✅ Admin boshqaruv: FAQAT EGA admin uchun")
+    print("\n🔧 Kino o'chirish jarayoni ENDI SADDODA:")
+    print("   1. '🗑️ Kino O'chirish' tugmasini bosing")
+    print("   2. Kino kodini kiriting (masalan: 15)")
+    print("   3. Kino DARHOL o'chiriladi")
+    print("   4. Bekor qilish uchun '🔙 Bekor qilish' tugmasi")
+    
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+# ========================== RENDER.COM uchun QO'SHIMCHA ==========================
+if __name__ == "__main__":
+    # Fayllarni yaratish (agar mavjud bo'lmasa)
+    for file in [MOVIES_FILE, CHANNELS_FILE, USERS_FILE, ADMINS_FILE]:
+        if not os.path.exists(file):
+            if file == ADMINS_FILE:
+                data = {"admin_ids": [OWNER_ID]}
+                with open(file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+            else:
+                with open(file, 'w', encoding='utf-8') as f:
+                    json.dump({}, f, ensure_ascii=False, indent=4)
+    
+    # RENDER uchun PORT ni ishlatish
+    import os
+    PORT = int(os.environ.get('PORT', 10000))
+    
+    print(f"🚀 Render.com da ishga tushmoqda...")
+    print(f"🌐 PORT: {PORT}")
+    
+    # Botni ishga tushirish
     try:
-        await run_server()
-        # Server doimiy ishlashi uchun
-        await asyncio.Event().wait()
+        main()
     except KeyboardInterrupt:
         print("\n👋 Bot to'xtatildi")
     except Exception as e:
         logger.error(f"Asosiy xatolik: {e}")
+        print(f"❌ Xatolik: {e}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
