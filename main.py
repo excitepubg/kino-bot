@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Telegram Kino Bot
-Adminlar kinoni yuklaydi va kod beradi
-Foydalanuvchilar kod orqali kino olishadi
-Majburiy obuna tizimi mavjud
-EGA admin - boshqa adminlarni boshqarishi mumkin
+Telegram Kino Bot - Local uchun polling versiyasi
 """
 
 import os
 import logging
 import json
-import re
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application, 
     CommandHandler, 
@@ -62,7 +57,7 @@ class Database:
         except json.JSONDecodeError:
             return {}
     
-    def load_admins(self) -> Set[int]:
+    def load_admins(self) -> set:
         """Adminlarni yuklash"""
         try:
             with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
@@ -128,14 +123,9 @@ class Database:
             return True
         return False
     
-    def get_admins(self) -> List[int]:
+    def get_admins(self) -> list:
         """Barcha adminlarni olish"""
         return sorted(list(self.admins))
-    
-    def get_admin_list_for_display(self) -> List[Tuple[int, int]]:
-        """Admin ro'yxatini ko'rish uchun tayyorlash"""
-        admins = self.get_admins()
-        return [(idx + 1, admin_id) for idx, admin_id in enumerate(admins)]
     
     # ========== KINO FUNKSIYALARI ==========
     def add_movie(self, code: str, file_id: str, file_type: str, caption: str = "", uploader_id: int = None):
@@ -197,16 +187,9 @@ class Database:
         """Barcha kanallarni olish"""
         return self.channels
     
-    def get_channel_ids(self) -> List[str]:
+    def get_channel_ids(self) -> list:
         """Kanallar ID larini olish"""
         return list(self.channels.keys())
-    
-    def get_channel_list_for_display(self) -> List[Tuple[int, str, Dict]]:
-        """Kanal ro'yxatini ko'rish uchun tayyorlash"""
-        channel_list = []
-        for idx, (channel_id, channel_info) in enumerate(self.channels.items(), 1):
-            channel_list.append((idx, channel_id, channel_info))
-        return channel_list
     
     # ========== FOYDALANUVCHI FUNKSIYALARI ==========
     def add_user(self, user_id: int):
@@ -1112,37 +1095,13 @@ def main():
     # Xatolik handleri
     application.add_error_handler(error_handler)
     
-    # Botni ishga tushirish
-    print("🤖 Bot ishga tushdi...")
+    # Botni ishga tushirish (polling rejimi)
+    print("🤖 Bot ishga tushdi (Polling rejimi)...")
     print(f"👑 EGA Admin ID: {OWNER_ID}")
     print(f"👤 Adminlar soni: {len(db.get_admins())}")
     print(f"🎬 Kinolar soni: {len(db.movies)}")
     print(f"📢 Kanallar soni: {len(db.channels)}")
     print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
-    print("\n📱 Admin panellari:")
-    print("   👑 EGA Admin: 9 ta tugma (admin boshqaruv bilan)")
-    print("   👤 Oddiy Admin: 8 ta tugma")
-    print("   👤 Foydalanuvchi: 1 ta tugma")
-    print("\n👑 Admin Boshqaruv paneli (4 ta tugma):")
-    print("   ➕ Yangi Admin Qo'shish")
-    print("   ➖ Admin O'chirish") 
-    print("   📋 Adminlar Ro'yxati")
-    print("   🔙 Admin Panelga Qaytish")
-    print("\n🎬 Kino o'chirish funksiyasi - Soddalashtirildi!")
-    print("   ✅ '🗑️ Kino O'chirish' tugmasi")
-    print("   ✅ Kino kodi yuborilgach darhol o'chiriladi")
-    print("   ❌ TASDIQLASH KERAK EMAS!")
-    print("   ✅ To'liq ma'lumot bilan o'chirish natijasi")
-    print("\n✅ Kanal qo'shish: TO'LIQ ISHLAYDI")
-    print("✅ Kanal ko'rish: TO'LIQ ISHLAYDI")
-    print("✅ Kanal o'chirish: TO'LIQ ISHLAYDI")
-    print("✅ Kino o'chirish: TO'LIQ ISHLAYDI (tasdiqlashsiz!)")
-    print("✅ Admin boshqaruv: FAQAT EGA admin uchun")
-    print("\n🔧 Kino o'chirish jarayoni ENDI SADDODA:")
-    print("   1. '🗑️ Kino O'chirish' tugmasini bosing")
-    print("   2. Kino kodini kiriting (masalan: 15)")
-    print("   3. Kino DARHOL o'chiriladi")
-    print("   4. Bekor qilish uchun '🔙 Bekor qilish' tugmasi")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
