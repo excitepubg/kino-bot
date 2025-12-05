@@ -1118,41 +1118,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-async def run_server():
-    """Server ishga tushirish"""
-    # Bot yaratish
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Handlerlarni qo'shish
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CallbackQueryHandler(callback_query_handler))
-    
-    # Fayl yuborish handleri
-    application.add_handler(MessageHandler(
-        filters.VIDEO | filters.Document.ALL | filters.AUDIO,
-        handle_file_message
-    ))
-    
-    # Matnli xabarlar handleri
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    
-    # Xatolik handleri
-    application.add_error_handler(error_handler)
-    
-    # Botni ishga tushirish
-    print("🤖 Bot ishga tushdi...")
-    print(f"👑 EGA Admin ID: {OWNER_ID}")
-    print(f"👤 Adminlar soni: {len(db.get_admins())}")
-    print(f"🎬 Kinolar soni: {len(db.movies)}")
-    print(f"📢 Kanallar soni: {len(db.channels)}")
-    print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
-    print(f"🌐 PORT: {PORT}")
-    
-    # Polling ni ishga tushirish
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-
 # ========================== ASOSIY FUNKSIYA ==========================
 def main():
     """Botni ishga tushirish"""
@@ -1207,7 +1172,33 @@ def main():
     print("   3. Kino DARHOL o'chiriladi")
     print("   4. Bekor qilish uchun '🔙 Bekor qilish' tugmasi")
     
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # RENDER uchun WEBHOOK ni o'chirish
+    import asyncio
+    
+    async def delete_webhook():
+        """Webhook ni o'chirish"""
+        try:
+            from telegram import Bot
+            bot = Bot(token=BOT_TOKEN)
+            webhook_info = await bot.get_webhook_info()
+            if webhook_info.url:
+                print(f"⚠️ Webhook topildi: {webhook_info.url}")
+                await bot.delete_webhook()
+                print("✅ Webhook o'chirildi")
+            else:
+                print("ℹ️ Webhook yo'q")
+        except Exception as e:
+            print(f"⚠️ Webhook tekshirishda xato: {e}")
+    
+    # Webhook ni o'chirish
+    asyncio.run(delete_webhook())
+    
+    # Polling ni ishga tushirish
+    application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
 
 # ========================== RENDER.COM uchun QO'SHIMCHA ==========================
 if __name__ == "__main__":
@@ -1237,4 +1228,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Asosiy xatolik: {e}")
         print(f"❌ Xatolik: {e}")
-
