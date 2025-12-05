@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Telegram Kino Bot - Local uchun polling versiyasi
+Telegram Kino Bot
+Adminlar kinoni yuklaydi va kod beradi
+Foydalanuvchilar kod orqali kino olishadi
+Majburiy obuna tizimi mavjud
+EGA admin - boshqa adminlarni boshqarishi mumkin
 """
 
 import os
 import logging
 import json
+import re
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple, Set
+import asyncio
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+# Dotenv ni o'rnatish
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     Application, 
     CommandHandler, 
@@ -21,8 +34,12 @@ from telegram.ext import (
 )
 
 # ========================== KONFIGURATSIYA ==========================
-BOT_TOKEN = "8570818233:AAGNh0lZgU4MTRoaM0XyrafOGRLAxHumhis"
-OWNER_ID = 8197301287  # EGA admin ID
+# .env faylidan o'qish yoki default qiymat
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8570818233:AAGNh0lZgU4MTRoaM0XyrafOGRLAxHumhis")
+OWNER_ID = int(os.getenv("OWNER_ID", "8197301287"))
+
+# Server porti (Render uchun)
+PORT = int(os.getenv("PORT", "10000"))
 
 # Adminlar fayli
 ADMINS_FILE = "admins.json"
@@ -42,10 +59,25 @@ logger = logging.getLogger(__name__)
 # ========================== MA'LUMOTLARNI SAQLASH ==========================
 class Database:
     def __init__(self):
+        # Fayllar mavjudligini tekshirish
+        self.ensure_files_exist()
         self.movies = self.load_data(MOVIES_FILE)
         self.channels = self.load_data(CHANNELS_FILE)
         self.users = self.load_data(USERS_FILE)
         self.admins = self.load_admins()
+    
+    def ensure_files_exist(self):
+        """Fayllar mavjudligini tekshirish va yaratish"""
+        for file in [ADMINS_FILE, MOVIES_FILE, CHANNELS_FILE, USERS_FILE]:
+            if not os.path.exists(file):
+                if file == ADMINS_FILE:
+                    data = {"admin_ids": [OWNER_ID]}
+                else:
+                    data = {}
+                
+                with open(file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+                logger.info(f"{file} fayli yaratildi")
     
     def load_data(self, filename: str) -> Dict:
         """JSON fayldan ma'lumotlarni yuklash"""
@@ -53,11 +85,13 @@ class Database:
             with open(filename, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
+            self.ensure_files_exist()
             return {}
         except json.JSONDecodeError:
+            logger.error(f"{filename} faylda JSON xatosi")
             return {}
     
-    def load_admins(self) -> set:
+    def load_admins(self) -> Set[int]:
         """Adminlarni yuklash"""
         try:
             with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
@@ -65,9 +99,8 @@ class Database:
                 admin_ids = set(data.get("admin_ids", []))
                 admin_ids.add(OWNER_ID)  # EGA admin har doim admin
                 return admin_ids
-        except FileNotFoundError:
-            return {OWNER_ID}
-        except json.JSONDecodeError:
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.ensure_files_exist()
             return {OWNER_ID}
     
     def save_admins(self):
@@ -123,9 +156,14 @@ class Database:
             return True
         return False
     
-    def get_admins(self) -> list:
+    def get_admins(self) -> List[int]:
         """Barcha adminlarni olish"""
         return sorted(list(self.admins))
+    
+    def get_admin_list_for_display(self) -> List[Tuple[int, int]]:
+        """Admin ro'yxatini ko'rish uchun tayyorlash"""
+        admins = self.get_admins()
+        return [(idx + 1, admin_id) for idx, admin_id in enumerate(admins)]
     
     # ========== KINO FUNKSIYALARI ==========
     def add_movie(self, code: str, file_id: str, file_type: str, caption: str = "", uploader_id: int = None):
@@ -187,9 +225,16 @@ class Database:
         """Barcha kanallarni olish"""
         return self.channels
     
-    def get_channel_ids(self) -> list:
+    def get_channel_ids(self) -> List[str]:
         """Kanallar ID larini olish"""
         return list(self.channels.keys())
+    
+    def get_channel_list_for_display(self) -> List[Tuple[int, str, Dict]]:
+        """Kanal ro'yxatini ko'rish uchun tayyorlash"""
+        channel_list = []
+        for idx, (channel_id, channel_info) in enumerate(self.channels.items(), 1):
+            channel_list.append((idx, channel_id, channel_info))
+        return channel_list
     
     # ========== FOYDALANUVCHI FUNKSIYALARI ==========
     def add_user(self, user_id: int):
@@ -1073,9 +1118,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
 
-# ========================== ASOSIY FUNKSIYA ==========================
-def main():
-    """Botni ishga tushirish"""
+async def run_server():
+    """Server ishga tushirish"""
     # Bot yaratish
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1095,26 +1139,31 @@ def main():
     # Xatolik handleri
     application.add_error_handler(error_handler)
     
-    # Botni ishga tushirish (polling rejimi)
-    print("🤖 Bot ishga tushdi (Polling rejimi)...")
+    # Botni ishga tushirish
+    print("🤖 Bot ishga tushdi...")
     print(f"👑 EGA Admin ID: {OWNER_ID}")
     print(f"👤 Adminlar soni: {len(db.get_admins())}")
     print(f"🎬 Kinolar soni: {len(db.movies)}")
     print(f"📢 Kanallar soni: {len(db.channels)}")
     print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
+    print(f"🌐 PORT: {PORT}")
     
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Polling ni ishga tushirish
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+# ========================== ASOSIY FUNKSIYA ==========================
+async def main():
+    """Asosiy funksiya"""
+    try:
+        await run_server()
+        # Server doimiy ishlashi uchun
+        await asyncio.Event().wait()
+    except KeyboardInterrupt:
+        print("\n👋 Bot to'xtatildi")
+    except Exception as e:
+        logger.error(f"Asosiy xatolik: {e}")
 
 if __name__ == "__main__":
-    # Fayllarni yaratish (agar mavjud bo'lmasa)
-    for file in [MOVIES_FILE, CHANNELS_FILE, USERS_FILE, ADMINS_FILE]:
-        if not os.path.exists(file):
-            if file == ADMINS_FILE:
-                data = {"admin_ids": [OWNER_ID]}
-                with open(file, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
-            else:
-                with open(file, 'w', encoding='utf-8') as f:
-                    json.dump({}, f, ensure_ascii=False, indent=4)
-    
-    main()
+    asyncio.run(main())
