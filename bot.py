@@ -1119,8 +1119,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
 # ========================== ASOSIY FUNKSIYA ==========================
-def main():
-    """Botni ishga tushirish"""
+async def main_async():
+    """Asinxron asosiy funksiya"""
     # Bot yaratish
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -1147,58 +1147,34 @@ def main():
     print(f"🎬 Kinolar soni: {len(db.movies)}")
     print(f"📢 Kanallar soni: {len(db.channels)}")
     print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
-    print("\n📱 Admin panellari:")
-    print("   👑 EGA Admin: 9 ta tugma (admin boshqaruv bilan)")
-    print("   👤 Oddiy Admin: 8 ta tugma")
-    print("   👤 Foydalanuvchi: 1 ta tugma")
-    print("\n👑 Admin Boshqaruv paneli (4 ta tugma):")
-    print("   ➕ Yangi Admin Qo'shish")
-    print("   ➖ Admin O'chirish") 
-    print("   📋 Adminlar Ro'yxati")
-    print("   🔙 Admin Panelga Qaytish")
-    print("\n🎬 Kino o'chirish funksiyasi - Soddalashtirildi!")
-    print("   ✅ '🗑️ Kino O'chirish' tugmasi")
-    print("   ✅ Kino kodi yuborilgach darhol o'chiriladi")
-    print("   ❌ TASDIQLASH KERAK EMAS!")
-    print("   ✅ To'liq ma'lumot bilan o'chirish natijasi")
-    print("\n✅ Kanal qo'shish: TO'LIQ ISHLAYDI")
-    print("✅ Kanal ko'rish: TO'LIQ ISHLAYDI")
-    print("✅ Kanal o'chirish: TO'LIQ ISHLAYDI")
-    print("✅ Kino o'chirish: TO'LIQ ISHLAYDI (tasdiqlashsiz!)")
-    print("✅ Admin boshqaruv: FAQAT EGA admin uchun")
-    print("\n🔧 Kino o'chirish jarayoni ENDI SADDODA:")
-    print("   1. '🗑️ Kino O'chirish' tugmasini bosing")
-    print("   2. Kino kodini kiriting (masalan: 15)")
-    print("   3. Kino DARHOL o'chiriladi")
-    print("   4. Bekor qilish uchun '🔙 Bekor qilish' tugmasi")
     
     # RENDER uchun WEBHOOK ni o'chirish
-    import asyncio
-    
-    async def delete_webhook():
-        """Webhook ni o'chirish"""
-        try:
-            from telegram import Bot
-            bot = Bot(token=BOT_TOKEN)
-            webhook_info = await bot.get_webhook_info()
-            if webhook_info.url:
-                print(f"⚠️ Webhook topildi: {webhook_info.url}")
-                await bot.delete_webhook()
-                print("✅ Webhook o'chirildi")
-            else:
-                print("ℹ️ Webhook yo'q")
-        except Exception as e:
-            print(f"⚠️ Webhook tekshirishda xato: {e}")
-    
-    # Webhook ni o'chirish
-    asyncio.run(delete_webhook())
+    try:
+        from telegram import Bot
+        bot = Bot(token=BOT_TOKEN)
+        webhook_info = await bot.get_webhook_info()
+        if webhook_info.url:
+            print(f"⚠️ Webhook topildi: {webhook_info.url}")
+            await bot.delete_webhook()
+            print("✅ Webhook o'chirildi")
+        else:
+            print("ℹ️ Webhook yo'q")
+    except Exception as e:
+        print(f"⚠️ Webhook tekshirishda xato: {e}")
     
     # Polling ni ishga tushirish
-    application.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES,
-        close_loop=False
-    )
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    
+    # Dasturni to'xtatmaslik uchun
+    import asyncio
+    await asyncio.Event().wait()
+
+def main():
+    """Sinxron asosiy funksiya"""
+    import asyncio
+    asyncio.run(main_async())
 
 # ========================== RENDER.COM uchun QO'SHIMCHA ==========================
 if __name__ == "__main__":
