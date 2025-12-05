@@ -1178,6 +1178,61 @@ def run_bot():
     )
 
 # ========================== WEB SERVER FUNKSIYASI ==========================
+# ========================== BOT FUNKSIYASI ==========================
+async def run_bot_async():
+    """Botni ishga tushirish (asynchronous)"""
+    print("🤖 Bot ishga tushmoqda...")
+    
+    # Bot yaratish
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Handlerlarni qo'shish
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CallbackQueryHandler(callback_query_handler))
+    
+    # Fayl yuborish handleri
+    application.add_handler(MessageHandler(
+        filters.VIDEO | filters.Document.ALL | filters.AUDIO,
+        handle_file_message
+    ))
+    
+    # Matnli xabarlar handleri
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    # Xatolik handleri
+    application.add_error_handler(error_handler)
+    
+    print(f"👑 EGA Admin ID: {OWNER_ID}")
+    print(f"👤 Adminlar soni: {len(db.get_admins())}")
+    print(f"🎬 Kinolar soni: {len(db.movies)}")
+    print(f"📢 Kanallar soni: {len(db.channels)}")
+    print(f"👥 Foydalanuvchilar soni: {len(db.users)}")
+    
+    # Polling ni ishga tushirish
+    await application.initialize()
+    await application.start()
+    
+    # Webhook ni o'chirish (agar mavjud bo'lsa)
+    try:
+        webhook_info = await application.bot.get_webhook_info()
+        if webhook_info.url:
+            print(f"⚠️ Webhook topildi: {webhook_info.url}")
+            await application.bot.delete_webhook()
+            print("✅ Webhook o'chirildi")
+    except Exception as e:
+        print(f"⚠️ Webhook tekshirishda xato: {e}")
+    
+    # Polling ni ishga tushirish
+    await application.updater.start_polling()
+    
+    # Hech qachon tugamaydi
+    await asyncio.Event().wait()
+
+def run_bot():
+    """Botni sinxron tarzda ishga tushirish"""
+    asyncio.run(run_bot_async())
+
+# ========================== WEB SERVER FUNKSIYASI ==========================
 def run_web_server():
     """Web server ishga tushirish"""
     print(f"🌐 Web server {PORT} portda ishga tushmoqda...")
@@ -1185,7 +1240,8 @@ def run_web_server():
         fastapi_app,
         host="0.0.0.0",
         port=PORT,
-        log_level="info"
+        log_level="info",
+        access_log=True
     )
 
 # ========================== ASOSIY FUNKSIYA ==========================
@@ -1205,12 +1261,12 @@ def main():
     print(f"🚀 Render.com Web Service da ishga tushmoqda...")
     print(f"🌐 PORT: {PORT}")
     
-    # Botni alohida threadda ishga tushirish
-    bot_thread = Thread(target=run_bot, daemon=True)
-    bot_thread.start()
+    # Web serverni alohida threadda ishga tushirish
+    web_thread = Thread(target=run_web_server, daemon=True)
+    web_thread.start()
     
-    # Web serverni asosiy threadda ishga tushirish
-    run_web_server()
+    # Botni asosiy threadda ishga tushirish (bu threadda event loop bor)
+    run_bot()
 
 # ========================== DASURNI ISHGA TUSHIRISH ==========================
 if __name__ == "__main__":
