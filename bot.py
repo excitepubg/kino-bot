@@ -39,7 +39,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "8570818233:AAGNh0lZgU4MTRoaM0XyrafOGRLAxHumh
 OWNER_ID = int(os.getenv("OWNER_ID", "8197301287"))
 
 # Server porti (Render uchun)
-PORT = int(os.getenv("PORT", "10000"))
+
 
 # Adminlar fayli
 ADMINS_FILE = "admins.json"
@@ -1189,18 +1189,42 @@ if __name__ == "__main__":
                 with open(file, 'w', encoding='utf-8') as f:
                     json.dump({}, f, ensure_ascii=False, indent=4)
     
-    # RENDER uchun PORT ni ishlatish
-    import os
-    PORT = int(os.environ.get('PORT', 10000))
-    
-    print(f"🚀 Render.com da ishga tushmoqda...")
-    print(f"🌐 PORT: {PORT}")
+    print(f"🚀 Render.com Background Worker da ishga tushmoqda...")
     
     # Botni ishga tushirish
     try:
-        main()
+        # Bot yaratish
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Handlerlarni qo'shish
+        application.add_handler(CommandHandler("start", start_command))
+        application.add_handler(CallbackQueryHandler(callback_query_handler))
+        
+        # Fayl yuborish handleri
+        application.add_handler(MessageHandler(
+            filters.VIDEO | filters.Document.ALL | filters.AUDIO,
+            handle_file_message
+        ))
+        
+        # Matnli xabarlar handleri
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+        
+        # Xatolik handleri
+        application.add_error_handler(error_handler)
+        
+        # Botni ishga tushirish
+        print("🤖 Bot ishga tushdi...")
+        print(f"👑 EGA Admin ID: {OWNER_ID}")
+        
+        # Polling ni ishga tushirish
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+        
     except KeyboardInterrupt:
         print("\n👋 Bot to'xtatildi")
     except Exception as e:
         logger.error(f"Asosiy xatolik: {e}")
         print(f"❌ Xatolik: {e}")
+
